@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 # Similar to Deep Q-Network lecture exercise and the PyTorch extracurricular Content
 class Network(nn.Module):
-    def __init__(self, input_size, output_size, seed, hidden_layers=[64,64], actor=False):
+    def __init__(self, input_size, output_size, seed, hidden_layers=[32,32], actor=False):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
@@ -18,6 +18,10 @@ class Network(nn.Module):
         '''
         super().__init__()
         self.seed = torch.manual_seed(seed)
+
+        # Reduce network complexity for actors
+        if actor: 
+            hidden_layers = [16,16]
 
         # Add the first layer, input to a hidden layer
         self.hidden_layers = nn.ModuleList([nn.Linear(input_size, hidden_layers[0])])

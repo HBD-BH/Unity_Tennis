@@ -25,7 +25,7 @@ class MADDPG_Agent():
         self.gamma = gamma
         self.tau = tau
 
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE)
+        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
 
     def get_actors(self):
         """Get actual actors of all the agents in the MADDPG object"""
@@ -61,16 +61,19 @@ class MADDPG_Agent():
         actions = [agent.act_targets(state, noise) for agent, state in zip(self.maddpg_agent, states_all_agents)]
         return actions
 
-    def step(self, experience):
+    def step(self, state, action, reward, next_state, done):
         """ Save experience in replay memory, and learn new target weights
 
         Params
         ======
-            experience: tuple
-                state, state_full, action, reward, next_state, next_state_full, done
+            state:      current state
+            action:     taken action
+            reward:     earned reward
+            next_state: next state
+            done:       Whether episode has finished
         """
         # Save experience in replay memory
-        self.memory.add(experience)
+        self.memory.add(state, action, reward, next_state, done)
         
         # If enough samples are available in memory, get random subset and learn
         if len(self.memory) > BATCH_SIZE:

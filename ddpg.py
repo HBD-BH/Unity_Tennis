@@ -58,8 +58,8 @@ class DDPGAgent:
             state (array_like): current state
         """
         # Uncomment if state is numpy array instead of tensor
-        # state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        state = state.to(device)
+        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+        #state = state.to(device)
         self.actor_local.eval()
 
         # Get actions for current state, transformed from probabilities

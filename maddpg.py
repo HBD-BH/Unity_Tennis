@@ -1,5 +1,6 @@
 from ddpg import DDPGAgent
 import torch
+import random
 from utilities import soft_update, transpose_to_tensor
 from buffer import ReplayBuffer
 
@@ -10,21 +11,21 @@ TAU   = 2e-2    # For soft update of target parameters
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class MADDPG(): 
-    def __init__(self, gamma=GAMMA, tau=TAU):
-        super(MADDPG, self).__init__()
+class MADDPG_Agent(): 
+    def __init__(self, state_size, action_size, seed=1, gamma=GAMMA, tau=TAU):
+        super(MADDPG_Agent, self).__init__()
 
-        state_size = 24
-        action_size = 2
-        seed = 1
+        self.state_size = state_size
+        self.action_size = action_size
+        self.seed = random.seed(seed)
 
-        self.maddpg_agent = [DDPGAgent(state_size, action_size, seed),
-                             DDPGAgent(state_size, action_size, seed)]
+        self.maddpg_agent = [DDPGAgent(self.state_size, self.action_size, seed),
+                             DDPGAgent(self.state_size, self.action_size, seed)]
 
         self.gamma = gamma
         self.tau = tau
 
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE)
 
     def get_actors(self):
         """Get actual actors of all the agents in the MADDPG object"""
@@ -128,7 +129,7 @@ class MADDPG():
 
         # ------------------- update actor ------------------- #
         # Create input to agent's actor, detach other agents to save computation time
-        actor_input = [self.maddpg_agent[i].actor_local(state) if i == agent_number \ 
+        actor_input = [self.maddpg_agent[i].actor_local(state) if i == agent_number \
                         else self.maddpg_agent[i].actor(state).detach()
                         for i, state in enumerate(states) ]
         actor_input = torch.cat(actor_input, dim=1)

@@ -1,6 +1,7 @@
 import torch
 import torch.optim as optim
 import numpy as np
+import random
 
 from model import Network
 from utilities import hard_update
@@ -42,8 +43,8 @@ class DDPGAgent:
         self.noise = OUNoise(action_size, scale=1.0)
 
         # Initialize target networks
-        hard_update(self.actor_target, self.actor)
-        hard_update(self.critic_target, self.critic)
+        hard_update(self.actor_target, self.actor_local)
+        hard_update(self.critic_target, self.critic_local)
 
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)

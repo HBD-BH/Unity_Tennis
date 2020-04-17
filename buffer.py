@@ -22,7 +22,7 @@ class ReplayBuffer:
         self.memory = deque(maxlen=buffer_size)  
         self.batch_size = batch_size
     
-    def add(self, experience)
+    def add(self, experience):
         """Add a new experience to memory."""
         experiences = transpose_list(experience)
         for e in experiences:

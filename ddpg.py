@@ -31,8 +31,9 @@ class DDPGAgent:
         self.seed = random.seed(seed)
         self.action_limits = [-1,1]     # Min, Max of all action values
         self.num_agents = 2             # Two agents for tennis environment
+
         # Critic input = state_size + size_actions*num_agents = 24+2*2=28
-        critic_input = self.state_size + self.action_size * self.num_agents
+        critic_input = self.state_size + self.action_size #* self.num_agents
         critic_output = 1 # Critic output is just a number
 
         self.actor_local = Network(state_size, action_size, seed, actor=True).to(device)

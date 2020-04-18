@@ -8,7 +8,9 @@ from utilities import hard_update
 
 from OUNoise import OUNoise
 
-LR = 1e-3               # Learning rate for the optimizer
+LR_ACTOR = 1e-3               # Learning rate for the actor's optimizer
+LR_CRITIC = 1e-4               # Learning rate for the critic's optimizer
+
 WEIGHT_DECAY = 1e-5     # Weight decay for critic optimizer
 
 
@@ -47,8 +49,8 @@ class DDPGAgent:
         hard_update(self.actor_target, self.actor_local)
         hard_update(self.critic_target, self.critic_local)
 
-        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR)
-        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
+        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
 
     # act and act_targets similar to exercises and MADDPG Lab
     def act(self, state, noise=0.0):

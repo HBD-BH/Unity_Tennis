@@ -6,10 +6,12 @@ import random
 from utilities import soft_update, transpose_to_tensor
 from buffer import ReplayBuffer
 
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 256         # minibatch size
-GAMMA = 0.95    # Discount factor
-TAU   = 2e-2    # For soft update of target parameters
+BUFFER_SIZE = int(1e6)  # Replay buffer size
+BATCH_SIZE = 256        # Minibatch size
+GAMMA = 0.99            # Discount factor
+TAU   = 3e-3            # For soft update of target parameters
+
+GRAD_CLIPPING = 1.0     # For gradient clipping
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -53,8 +55,7 @@ class MADDPG_Agent():
 
     def act_targets(self, states_all_agents, noise=0.0):
         """Get actions by target networks from all agents in the MADDPG object.
-
-        Params
+Params
         ======
             states_all_agents (array-like): the states for each agent
             noise: the noise to apply
@@ -125,7 +126,8 @@ class MADDPG_Agent():
         # Minimize the critic loss
         agent.critic_optimizer.zero_grad()
         critic_loss.backward()
-        #torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1) # As mentioned on project page
+        if GRAD_CLIPPING > 0: 
+            torch.nn.utils.clip_grad_norm_(agent.critic_local.parameters(), GRAD_CLIPPING) # As mentioned on project page
         agent.critic_optimizer.step()
 
         # ------------------- update actor ------------------- #

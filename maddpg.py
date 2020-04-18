@@ -1,7 +1,9 @@
 from ddpg import DDPGAgent
 import torch
+# import torch.nn as nn # Needed for grad clipping
+import torch.nn.functional as F
 import random
-from utilities import soft_update 
+from utilities import soft_update, transpose_to_tensor
 from buffer import ReplayBuffer
 
 BUFFER_SIZE = int(1e5)  # replay buffer size
@@ -99,26 +101,22 @@ class MADDPG_Agent():
         
         states, actions, rewards, next_states, dones = experiences
 
-        #states_full = torch.stack(states_full)
-        # next_states_full = torch.stack(next_states_full)
-
         agent = self.maddpg_agent[agent_number]
 
         # ------------------- update critic ------------------- #
-        next_actions = agent.actor_target(next_states)
-        #print(next_actions.size())
-        #print(next_states.size())
-        target_critic_input = torch.cat((next_states, next_actions), dim=1).to(device)
-        
+        next_actions = agent.actor_target(next_states[agent_number::len(self.maddpg_agent),:])
+        target_critic_input = torch.cat((next_states[agent_number::len(self.maddpg_agent),:], next_actions), dim=1).to(device)
+
         # Get Q targets (for next states) from target model (on CPU)
         with torch.no_grad():
             Q_targets_next = agent.critic_target(target_critic_input)
         # Compute Q targets for current states 
-        Q_targets = rewards[agent_number].view(-1, 1) + self.gamma * Q_targets_next * (1 - dones[agent_number].view(-1, 1))
+        Q_targets = rewards[:,agent_number].view(-1,1) + self.gamma * Q_targets_next * (1 - dones[:,agent_number].view(-1,1))
 
         # Get expected Q values from local model
-        actions = torch.cat(actions, dim=1)
-        critic_input = torch.cat((states.t(), actions), dim=1).to(device)
+        actions = actions.squeeze().float()#torch.cat(actions, dim=1)
+
+        critic_input = torch.cat((states[agent_number::len(self.maddpg_agent),:], actions[agent_number::len(self.maddpg_agent),:]), dim=1).to(device)
         Q_expected = agent.critic_local(critic_input)
 
         # Compute critic loss
@@ -132,15 +130,14 @@ class MADDPG_Agent():
 
         # ------------------- update actor ------------------- #
         # Create input to agent's actor, detach other agents to save computation time
-        actor_input = [self.maddpg_agent[i].actor_local(state) if i == agent_number \
-                        else self.maddpg_agent[i].actor(state).detach()
-                        for i, state in enumerate(states) ]
-        actor_input = torch.cat(actor_input, dim=1)
+        actions_expected = agent.actor_local(states[agent_number::len(self.maddpg_agent),:])
+
         # Create input to agent's critic to get policy
-        critic_input = torch.cat((states.t(), actor_input), dim=1)
+        critic_input = torch.cat((states[agent_number::len(self.maddpg_agent)], actions_expected), dim=1)
 
         # Compute actor loss based on expectation from actions_expected
         actor_loss = -agent.critic_local(critic_input).mean()
+
         # Minimize the actor loss
         agent.actor_optimizer.zero_grad()
         actor_loss.backward()

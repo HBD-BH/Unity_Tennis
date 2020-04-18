@@ -31,6 +31,7 @@ class ReplayBuffer:
     def add(self, state, action, reward, next_state, done):
         """Add a new experience to memory."""
         e = self.experience(state, action, reward, next_state, done)
+        #print(f"Experience: {e}")
         self.memory.append(e)
     
     def sample(self):

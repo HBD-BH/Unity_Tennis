@@ -4,27 +4,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Similar to Deep Q-Network lecture exercise and the PyTorch extracurricular Content
-class Network(nn.Module):
-    def __init__(self, input_size, output_size, seed, hidden_layers=[512,512], actor=False):
+class Actor(nn.Module):
+    "Actor Network" 
+
+    def __init__(self, state_size, action_size, seed, hidden_layers=[128,128]):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
             ---------
-            input_size: integer, size of the input (e.g., state space)
-            output_size: integer, size of the output layer (e.g., action space)
+            state_size: integer, size of the input (e.g., state space)
+            action_size: integer, size of the output layer (e.g., action space)
             seed (int): Random seed
             hidden_layers: list of integers, the sizes of the hidden layers
-            actor (bool): True if the network is used for an actor, false otherwise
         '''
         super().__init__()
         self.seed = torch.manual_seed(seed)
 
-        # Reduce network complexity for actors
-        if actor: 
-            hidden_layers = [512,512]
-
         # Add the first layer, input to a hidden layer
-        self.hidden_layers = nn.ModuleList([nn.Linear(input_size, hidden_layers[0])])
+        self.hidden_layers = nn.ModuleList([nn.Linear(state_size, hidden_layers[0])])
         self.hidden_layers.extend([nn.BatchNorm1d(hidden_layers[0])])
         
         # Add a variable number of more hidden layers
@@ -33,9 +30,7 @@ class Network(nn.Module):
 
         self.nonlin = F.selu
         
-        self.output = nn.Linear(hidden_layers[-1], output_size)
-
-        self.actor = actor
+        self.output = nn.Linear(hidden_layers[-1], action_size)
         
     def forward(self, state):
         ''' Forward pass through the network, returns the action '''
@@ -46,13 +41,50 @@ class Network(nn.Module):
             x = F.selu(linear(x))
     
         x = self.output(x)
+
+        # Return an action probability
+        return F.tanh(x)
+
+# Similar to Deep Q-Network lecture exercise and the PyTorch extracurricular Content
+class Critic(nn.Module):
+    "Critic Network" 
+
+    def __init__(self, state_size, action_size, seed, hidden_layers=[128,128]):
+        ''' Builds a feedforward network with arbitrary hidden layers.
+        
+            Arguments
+            ---------
+            state_size: integer, size of the input (e.g., state space)
+            action_size: integer, size of the output layer (e.g., action space)
+            seed (int): Random seed
+            hidden_layers: list of integers, the sizes of the hidden layers
+        '''
+        super().__init__()
+        self.seed = torch.manual_seed(seed)
+
+        # Add the first layer, input to a hidden layer
+        # For the critic, this is num_agents * (states + actions)
+        self.hidden_layers = nn.ModuleList([nn.Linear((state_size + action_size) * 2, hidden_layers[0])])
+        self.hidden_layers.extend([nn.BatchNorm1d(hidden_layers[0])])
+        
+        # Add a variable number of more hidden layers
+        layer_sizes = zip(hidden_layers[:-1], hidden_layers[1:])
+        self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
+
+        self.nonlin = F.selu
+        
+        self.output = nn.Linear(hidden_layers[-1], 1)
+        
+    def forward(self, state):
+        ''' Forward pass through the network, returns the estimated value '''
+        
+        x = state
+        # Forward through each layer in `hidden_layers`, with SELU activation
+        for linear in self.hidden_layers:
+            x = F.selu(linear(x))
     
-        if self.actor:
-            # Actor: return an action probability
-            return F.tanh(x)
+        x = self.output(x)
 
-        else: 
-            # Critic: return an expected reward
-            return x
+        # Return the estimated value itself
+        return x
 
-            

@@ -106,9 +106,9 @@ class DDPGAgent:
         Params
         ======
             experiences (Tuple[torch.Variable]): tuple of (s, a, r, s', done) tuples 
-            gamma (0..1): discount factor
             all_actions (Tuple[torch.Variable]): all actions 
             all_next_actions (Tuple[torch.Variable]): all next actions 
+            gamma (0..1): discount factor
         """ 
 
         states, actions, rewards, next_states, dones = experiences

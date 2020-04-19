@@ -6,12 +6,13 @@ import random
 from utilities import soft_update, transpose_to_tensor
 from buffer import ReplayBuffer
 
-BUFFER_SIZE = int(1e6)  # Replay buffer size
+BUFFER_SIZE = int(1e5)  # Replay buffer size
 BATCH_SIZE = 256        # Minibatch size
 GAMMA = 0.99            # Discount factor
-TAU   = 3e-3            # For soft update of target parameters
+TAU   = 1e-3            # For soft update of target parameters
 
 GRAD_CLIPPING = 1.0     # For gradient clipping
+UPDATE_EVERY = 3
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -23,11 +24,13 @@ class MADDPG_Agent():
         self.action_size = action_size
         self.seed = random.seed(seed)
 
+        self.num_agents = 2             # Two agents for tennis environment
         self.maddpg_agent = [DDPGAgent(self.state_size, self.action_size, seed),
                              DDPGAgent(self.state_size, self.action_size, seed)]
 
         self.gamma = gamma
         self.tau = tau
+        self.t_step = 0
 
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
 
@@ -78,8 +81,11 @@ Params
         # Save experience in replay memory
         self.memory.add(state, action, reward, next_state, done)
         
-        # If enough samples are available in memory, get random subset and learn
-        if len(self.memory) > BATCH_SIZE:
+        # Learn every UPDATE_EVERY time steps.
+        self.t_step = (self.t_step + 1) % UPDATE_EVERY 
+
+        # If UPDATE_EVErY and enough samples are available in memory, get random subset and learn
+        if self.t_step == 0 and len(self.memory) > BATCH_SIZE:
             for a_i in range(len(self.maddpg_agent)):
                 experiences = self.memory.sample()
                 self.learn(experiences, a_i)
@@ -105,8 +111,8 @@ Params
         agent = self.maddpg_agent[agent_number]
 
         # ------------------- update critic ------------------- #
-        next_actions = agent.actor_target(next_states[agent_number::len(self.maddpg_agent),:])
-        target_critic_input = torch.cat((next_states[agent_number::len(self.maddpg_agent),:], next_actions), dim=1).to(device)
+        next_actions = agent.actor_target(next_states[agent_number::self.num_agents,:])
+        target_critic_input = torch.cat((next_states[agent_number::self.num_agents,:], next_actions), dim=1).to(device)
 
         # Get Q targets (for next states) from target model (on CPU)
         with torch.no_grad():
@@ -117,11 +123,11 @@ Params
         # Get expected Q values from local model
         actions = actions.squeeze().float()#torch.cat(actions, dim=1)
 
-        critic_input = torch.cat((states[agent_number::len(self.maddpg_agent),:], actions[agent_number::len(self.maddpg_agent),:]), dim=1).to(device)
+        critic_input = torch.cat((states[agent_number::self.num_agents,:], actions[agent_number::self.num_agents,:]), dim=1).to(device)
         Q_expected = agent.critic_local(critic_input)
 
         # Compute critic loss
-        critic_loss = F.mse_loss(Q_expected, Q_targets)
+        critic_loss = F.mse_loss(Q_expected, Q_targets.detach())
 
         # Minimize the critic loss
         agent.critic_optimizer.zero_grad()
@@ -132,10 +138,10 @@ Params
 
         # ------------------- update actor ------------------- #
         # Create input to agent's actor, detach other agents to save computation time
-        actions_expected = agent.actor_local(states[agent_number::len(self.maddpg_agent),:])
+        actions_expected = agent.actor_local(states[agent_number::self.num_agents,:])
 
         # Create input to agent's critic to get policy
-        critic_input = torch.cat((states[agent_number::len(self.maddpg_agent)], actions_expected), dim=1)
+        critic_input = torch.cat((states[agent_number::self.num_agents], actions_expected), dim=1)
 
         # Compute actor loss based on expectation from actions_expected
         actor_loss = -agent.critic_local(critic_input).mean()

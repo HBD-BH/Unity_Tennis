@@ -9,9 +9,9 @@ from utilities import hard_update
 from OUNoise import OUNoise
 
 LR_ACTOR = 1e-3               # Learning rate for the actor's optimizer
-LR_CRITIC = 1e-4               # Learning rate for the critic's optimizer
+LR_CRITIC = 1e-3               # Learning rate for the critic's optimizer
 
-WEIGHT_DECAY = 1e-5     # Weight decay for critic optimizer
+WEIGHT_DECAY = 0#1e-5     # Weight decay for critic optimizer
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -32,10 +32,9 @@ class DDPGAgent:
         self.action_size = action_size
         self.seed = random.seed(seed)
         self.action_limits = [-1,1]     # Min, Max of all action values
-        self.num_agents = 2             # Two agents for tennis environment
 
-        # Critic input = state_size + size_actions*num_agents = 24+2*2=28
-        critic_input = self.state_size + self.action_size #* self.num_agents
+        # Critic input = state_size + size_actions = 24+2=26
+        critic_input = self.state_size + self.action_size 
         critic_output = 1 # Critic output is just a number
 
         self.actor_local = Network(state_size, action_size, seed, actor=True).to(device)

@@ -64,7 +64,7 @@ class Critic(nn.Module):
 
         # Add the first layer, input to a hidden layer
         # For the critic, this is num_agents * (states + actions)
-        self.hidden_layers = nn.ModuleList([nn.Linear((state_size + action_size) * 2, hidden_layers[0])])
+        self.hidden_layers = nn.ModuleList([nn.Linear((state_size + action_size) * 1, hidden_layers[0])])
         self.hidden_layers.extend([nn.BatchNorm1d(hidden_layers[0])])
         
         # Add a variable number of more hidden layers

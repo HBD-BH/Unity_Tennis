@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 import random
 
@@ -37,11 +38,12 @@ class DDPGAgent:
         self.action_limits = [-1,1]     # Min, Max of all action values
         self.index = index
         self.tau = TAU
+        self.agent_number=2     # Number of agents in the environment
 
-        self.actor_local = Actor(state_size, action_size, seed, actor=True).to(device)
-        self.critic_local = Critic(state_size, action_size, seed, actor=False).to(device)
-        self.actor_target = Actor(state_size, action_size, seed, actor=True).to(device)
-        self.critic_target = Critic(state_size, action_size, seed, actor=False).to(device)
+        self.actor_local = Actor(state_size, action_size, seed).to(device)
+        self.critic_local = Critic(state_size, action_size, seed).to(device)
+        self.actor_target = Actor(state_size, action_size, seed).to(device)
+        self.critic_target = Critic(state_size, action_size, seed).to(device)
 
         self.noise = OUNoise(action_size, scale=1.0)
 
@@ -115,13 +117,27 @@ class DDPGAgent:
 
         # ------------------- update critic ------------------- #
         next_actions = torch.cat(all_next_actions, dim=1).to(device)
+        next_actions = next_actions[:,0+self.agent_number*self.index:2+self.agent_number*self.index]
+
+        print(f"Using next actions size {next_actions.size()}")
+        print(f"Using next states  size {next_states.size()}")
         with torch.no_grad():
-            Q_targets_next = self.critic_target(torch.cat(next_states, next_actions), dim=1)
+            Q_targets_next = self.critic_target(torch.cat((next_states[self.index::self.agent_number,:], next_actions), dim=1))
+
+        print(f"Using Q_tar_n size {Q_targets_next.size()}")
+        print(f"Using rewards size {rewards.size()}")
+        print(f"Using dones size {dones.size()}")
         Q_targets = rewards[:,self.index] + gamma * Q_targets_next * (1 - dones[:, self.index])
+        print(f"Using Q_tar size {Q_targets.size()}")
         
 
         actions = actions.squeeze().float()
+        print(f"Using all actions size {all_actions}")
+        print(f"Using actions size {actions.size()}")
+        print(f"Using states size {states.size()}")
         Q_expected = self.critic_local(torch.cat((states,actions), dim=1))
+        print(f"Using Q_exp size {Q_expected.size()}")
+
 
         # Compute critic loss
         critic_loss = F.mse_loss(Q_expected, Q_targets.detach())

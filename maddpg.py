@@ -110,20 +110,16 @@ Params
         ======
             experiences (Tuple[torch.Variable]): tuple of (s, a, r, s', done) tuples 
         """
-
-        actions = []
-        next_actions = []
-
+        
         for agent_number, agent in enumerate(self.maddpg_agent):
             states, _, _, next_states, _ = experiences[agent_number]
             state = states[agent_number::self.num_agents,:]
             next_state = next_states[agent_number::self.num_agents,:]
 
-            actions.append(agent.actor_local(state))
-            next_actions.append(agent.actor_target(next_state))
+            actions = agent.actor_local(state)
+            next_actions = agent.actor_target(next_state)
 
-        for agent_number, agent in enumerate(self.maddpg_agent):
-            agent.learn(experiences[agent_number],actions, next_actions)
+            agent.learn(experiences[agent_number], actions, next_actions)
 
         # Decay noise over time
         self.noise = max(self.noise - self.noise_decay, 0)

@@ -10,18 +10,19 @@ from utilities import hard_update, soft_update
 from OUNoise import OUNoise
 from buffer import ReplayBuffer, PrioritizedReplayBuffer
 
-LR_ACTOR = 1e-3               # Learning rate for the actor's optimizer
+LR_ACTOR = 1e-4               # Learning rate for the actor's optimizer
 LR_CRITIC = 1e-3               # Learning rate for the critic's optimizer
-TAU = 6e-2                    # Tau factor for soft update
+TAU = 3e-3                    # Tau factor for soft update
 GAMMA = 0.99            # Discount factor
 
 BUFFER_SIZE = int(1e6)  # Replay buffer size
-BATCH_SIZE = 128        # Minibatch size
+BATCH_SIZE = 256        # Minibatch size
 USE_PER = True          # Use normal replay buffer or prioritized experience replay
 
 WEIGHT_DECAY = 0#1e-5     # Weight decay for critic optimizer
-UPDATE_EVERY = 1        # Update weights every {} time steps
-N_UPDATES = 1           # Number of successive trainings
+UPDATE_EVERY = 10        # Update weights every {} time steps
+N_UPDATES = 5           # Number of successive trainings
+GRAD_CLIPPING = 1       # Gradient clipping
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -140,7 +141,7 @@ class DDPGAgent:
         # Save experience in replay memory
         if USE_PER:
             # If we use PER, we use the error from prediction to actual Q-value as priorities
-            next_actions = self.act_target(state).unsqueeze(0).to(device)
+            next_actions = self.act_target(state).to(device)
             # Transfer everything to torch tensors
             actions_agent = torch.from_numpy(action[:,self.index*self.num_agents:self.index*self.num_agents+self.action_size]).float().to(device)
             state = torch.from_numpy(state).unsqueeze(0).float().to(device)
@@ -226,6 +227,7 @@ class DDPGAgent:
         critic_loss = F.mse_loss(Q_expected, Q_targets)
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), GRAD_CLIPPING)
         self.critic_optimizer.step()
 
 

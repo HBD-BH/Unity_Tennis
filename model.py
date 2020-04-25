@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from itertools import chain
+
 # According to lesson
 def hidden_init(layer):
     fan_in = layer.weight.data.size()[0]
@@ -28,23 +30,43 @@ class Actor(nn.Module):
 
         # Add the first layer, input to a hidden layer
         self.hidden_layers = nn.ModuleList([nn.Linear(state_size, hidden_layers[0])])
-        #self.hidden_layers.extend([nn.BatchNorm1d(hidden_layers[0])])
         
         # Add a variable number of more hidden layers
         layer_sizes = zip(hidden_layers[:-1], hidden_layers[1:])
         self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
+        self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
+
         self.nonlin = F.selu
         
         self.output = nn.Linear(hidden_layers[-1], action_size)
+
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        """ Initialize model weights
+        All hidden layers except the last one: 
+        Initialize from uniform distribution [-1/sqrt(f) +1/sqrt(f)], where f is fan_in of the layer
+        Final layer: 
+        Initialize from [-3/10^3 +3/10^3]
+        """
+        for linear in self.hidden_layers[:-1]:
+            linear.weight.data.uniform_(*hidden_init(linear))
+        
+        self.hidden_layers[-1].weight.data.uniform_(-3e-3,+3e-3)
+
         
     def forward(self, state):
         ''' Forward pass through the network, returns the action '''
+
+        if state.dim() == 1:
+            state = state.unsqueeze(0)
+        
         
         x = state
         # Forward through each layer in `hidden_layers`, with SELU activation
-        for linear in self.hidden_layers:
-            x = self.nonlin(linear(x))
+        for i, linear in enumerate(self.hidden_layers):
+            x = self.nonlin(self.norm_layers[i](linear(x)))
     
         x = self.output(x)
 
@@ -83,30 +105,47 @@ class Critic(nn.Module):
             layer_sizes = zip(hidden_layers[1:-1], hidden_layers[2:])
             self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
+        self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
+
         self.nonlin = F.selu
         
         self.output = nn.Linear(hidden_layers[-1], 1)
+
+        self.initialize_weights()
         
+    def initialize_weights(self):
+        """ Initialize model weights
+        All hidden layers except the last one: 
+        Initialize from uniform distribution [-1/sqrt(f) +1/sqrt(f)], where f is fan_in of the layer
+        Final layer: 
+        Initialize from [-3/10^3 +3/10^3]
+        """
+        for linear in self.hidden_layers[:-1]:
+            linear.weight.data.uniform_(*hidden_init(linear))
+        
+        self.hidden_layers[-1].weight.data.uniform_(-3e-3,+3e-3)
+
     def forward(self, state, action):
         ''' Forward pass through the network, returns the estimated value '''
 
-        #print(f"Critic: state size {state.size()}")
+        if state.dim() == 1:
+            state = state.unsqueeze(0)
         
         # State is input to first layer, convert everything to float
-        x = self.nonlin(self.hidden_layers[0](state)).float()
+        x = self.nonlin(self.norm_layers[0](self.hidden_layers[0](state))).float()
         action = action.float()
 
         #print(f"x before cat: {x.size()}")
         #print(f"action before cat: {action.size()}")
         x = torch.cat((x, action), dim=1)
         #print(f"x after cat: {x.size()}")
-        x = self.nonlin(self.hidden_layers[1](x))
+        x = self.nonlin(self.norm_layers[1](self.hidden_layers[1](x)))
 
 
         # Forward through each layer in `hidden_layers`, with activation
         if len(self.hidden_layers)>2:
-            for linear in self.hidden_layers[2:]:
-                x = self.nonlin(linear(x))
+            for i, linear in enumerate(self.hidden_layers[2:]):
+                x = self.nonlin(self.norm_layers[i+2](linear(x)))
     
         x = self.output(x)
 

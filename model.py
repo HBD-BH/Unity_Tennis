@@ -13,7 +13,7 @@ def hidden_init(layer):
 class Actor(nn.Module):
     "Actor Network" 
 
-    def __init__(self, state_size, action_size, seed, hidden_layers=[256,128]):
+    def __init__(self, state_size, action_size, seed, hidden_layers=[256,256]):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
@@ -55,7 +55,7 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     "Critic Network" 
 
-    def __init__(self, state_size, action_size, seed, hidden_layers=[256,128]):
+    def __init__(self, state_size, action_size, seed, hidden_layers=[256,256]):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
@@ -111,4 +111,5 @@ class Critic(nn.Module):
 
         # Return the estimated value itself
         return x
+
 

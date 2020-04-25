@@ -48,6 +48,8 @@ class MADDPG_Agent():
         for agent, state in zip(self.maddpg_agent, states_all_agents):
             actions.append(agent.act(state,noise).numpy())
         # actions = [agent.act(state, noise).numpy() for agent, state in zip(self.maddpg_agent, states_all_agents)]
+        # Transform from list to (1,numagents*action_size) ndarray
+        actions = np.resize(np.asarray(actions, dtype=np.float32), (1,self.num_agents*self.action_size))
         return actions
 
     def act_targets(self, states_all_agents, noise=0.0):
@@ -85,4 +87,27 @@ Params
 
             #TODO: Maybe add states & actions for all agents? --> Adjust model, as well
             agent.step(state_agent, action, reward_agent, next_state_agent, done_agent)
+
+    def save(self, filename_root):
+        """Saves the agent to the local workplace, one DDPG agent at a time
+
+        Params
+        ======
+            filename_root (string): where to save the weights. Root name, to which 'agentX.pth' is appended. 
+        """
+        for i, agent in enumerate(self.maddpg_agent):
+            filename_cur = f"{filename_root}_agent{i}.pth"
+            agent.save(filename_cur)
+    
+    def load_weights(self, filename_root):
+        """ Load weights to update agent's actor and critic networks.
+        Expected is a format like the one produced by self.save()
+
+        Params
+        ======
+            filename_root (string): where to load data from. Root name, to which 'agentX' is appended for each agent.
+        """
+        for i, agent in enumerate(self.maddpg_agent):
+            filename_cur = f"{filename_root}_agent{i}.pth"
+            agent.load_weights(filename_cur)
 

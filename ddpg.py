@@ -127,7 +127,7 @@ class DDPGAgent:
         # Learn every UPDATE_EVERY time steps
         self.tstep = (self.tstep + 1 ) % UPDATE_EVERY
 
-        # If UPDATE_EVErY and enough samples are available in memory, get random subset and learn
+        # If UPDATE_EVERY and enough samples are available in memory, get random subset and learn
         if self.tstep == 0 and len(self.memory) > BATCH_SIZE:
             for _ in range(self.num_updates):
                 experiences = self.memory.sample()
@@ -152,34 +152,30 @@ class DDPGAgent:
         states, actions, rewards, next_states, dones = experiences
 
         next_actions = self.actor_target(next_states)
+        # Select correct set of actions from all actions
+        # e.g. 2 agents, action_size=2:
+        # actions: [-1 1 -1 1]
+        # agent0:  [-1 1]
+        # agent1:       [-1 1]
+        actions_agent = actions[:,self.index*self.num_agents:self.index*self.num_agents+self.action_size].float()
 
         # ------------------- update critic ------------------- #
-        print(f"Action in experiences: {actions.size()}")
+        #print(f"Action in experiences: {actions.size()}")
+        """
         if self.index == 0:
-            next_actions = torch.cat((next_actions, actions[:,:2].float()), dim=1).to(device)
+            next_actions = torch.cat((next_actions, actions_agent), dim=1).to(device)
         else:
-            next_actions = torch.cat((actions[:,2:], next_actions), dim=1).to(device)
-
+            next_actions = torch.cat((actions_agent, next_actions), dim=1).to(device)
+        """
+        next_actions = torch.cat((actions_agent, next_actions), dim=1).to(device)
+        
         # Predicted Q value from Critic target network
-        print(f"Using next actions size {next_actions.size()}")
-        print(f"Using next states  size {next_states.size()}")
         with torch.no_grad():
             Q_targets_next = self.critic_target(next_states, next_actions)
 
-        print(f"Using Q_tar_n size {Q_targets_next.size()}")
-        print(f"Using rewards size {rewards.size()}")
-        print(f"Using dones size {dones.size()}")
         Q_targets = rewards + self.gamma * Q_targets_next * (1 - dones)
-        print(f"Using Q_tar size {Q_targets.size()}")
-        
-
-        #actions = actions.squeeze().float()
-        print(f"Using actions size {actions.size()}")
-        print(f"Using states size {states.size()}")
         Q_expected = self.critic_local(states,actions)
-        print(f"Using Q_exp size {Q_expected.size()}")
-
-
+        
         # Compute critic loss
         critic_loss = F.mse_loss(Q_expected, Q_targets)
         self.critic_optimizer.zero_grad()
@@ -189,12 +185,13 @@ class DDPGAgent:
 
         # ------------------- update actor ------------------- #
         actions_expected = self.actor_local(states)
-
+        """
         if self.index == 0:
-            actions_expected = torch.cat((actions_expected, actions[:,2:]), dim=1)
+            actions_expected = torch.cat((actions_expected, actions_agent), dim=1)
         else: 
-            actions_expected = torch.cat((actions[:,:2], actions_predicted), dim=1)
-
+            actions_expected = torch.cat((actions_agent, actions_expected), dim=1)
+        """
+        actions_expected = torch.cat((actions_agent, actions_expected), dim=1)
         # Compute actor loss based on expectation from actions_expected
         actor_loss = -self.critic_local(states, actions_expected).mean()
         self.actor_optimizer.zero_grad()
@@ -202,6 +199,51 @@ class DDPGAgent:
         self.actor_optimizer.step()
 
         self.target_soft_update()
+        
+    def save(self, filename):
+        """Saves the agent to the local workplace
+
+        Params
+        ======
+            filename (string): where to save the weights
+        """
+
+        checkpoint = {'input_size': self.state_size,
+              'output_size': self.action_size,
+              'actor_hidden_layers': [each.out_features for each in self.actor_local.hidden_layers if each._get_name()!='BatchNorm1d'],
+              'actor_state_dict': self.actor_local.state_dict(),
+              'critic_hidden_layers': [each.out_features for each in self.critic_local.hidden_layers if each._get_name()!='BatchNorm1d'],
+              'critic_state_dict': self.critic_local.state_dict()}
+
+        torch.save(checkpoint, filename)
+
+
+    def load_weights(self, filename):
+        """ Load weights to update agent's actor and critic networks.
+        Expected is a format like the one produced by self.save()
+
+        Params
+        ======
+            filename (string): where to load data from. 
+        """
+        checkpoint = torch.load(filename)
+        if not checkpoint['input_size'] == self.state_size:
+            print(f"Error when loading weights from checkpoint {filename}: input size {checkpoint['input_size']} doesn't match state size of agent {self.state_size}")
+            return None
+        if not checkpoint['output_size'] == self.action_size:
+            print(f"Error when loading weights from checkpoint {filename}: output size {checkpoint['output_size']} doesn't match action space size of agent {self.action_size}")
+            return None
+        my_actor_hidden_layers = [each.out_features for each in self.actor_local.hidden_layers if each._get_name()!='BatchNorm1d']
+        if not checkpoint['actor_hidden_layers'] == my_actor_hidden_layers:
+            print(f"Error when loading weights from checkpoint {filename}: actor hidden layers {checkpoint['actor_hidden_layers']} don't match agent's actor hidden layers {my_actor_hidden_layers}")
+            return None
+        my_critic_hidden_layers = [each.out_features for each in self.critic_local.hidden_layers if each._get_name()!='BatchNorm1d']
+        if not checkpoint['critic_hidden_layers'] == my_critic_hidden_layers:
+            print(f"Error when loading weights from checkpoint {filename}: critic hidden layers {checkpoint['critic_hidden_layers']} don't match agent's critic hidden layers {my_critic_hidden_layers}")
+            return None
+        self.actor_local.load_state_dict(checkpoint['actor_state_dict'])
+        self.critic_local.load_state_dict(checkpoint['critic_state_dict'])
+
 
     def target_soft_update(self):
         """Soft update model parameters for actor and critic of all MADDPG agents.
@@ -210,4 +252,5 @@ class DDPGAgent:
 
         soft_update(self.actor_target, self.actor_local, self.tau)
         soft_update(self.critic_target, self.critic_local, self.tau)
+
 

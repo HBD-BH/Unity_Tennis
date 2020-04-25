@@ -1,3 +1,4 @@
+import numpy as np
 from ddpg import DDPGAgent
 import torch
 # import torch.nn as nn # Needed for grad clipping
@@ -63,7 +64,7 @@ Params
         actions = [agent.act_targets(state, noise) for agent, state in zip(self.maddpg_agent, states_all_agents)]
         return actions
 
-    def step(self, state, action, reward, next_state, done):
+    def step(self, state, action, reward, next_state, done,beta=0):
         """ Save experience in replay memory, and learn new target weights
 
         Params
@@ -73,6 +74,8 @@ Params
             reward:     earned reward
             next_state: next state
             done:       Whether episode has finished
+            beta (float 0..1): PER: to what extend use importance weigths 
+                                (0 - no corrections, 1 - full correction)
         """
         # Increase t_step
         self.tstep += 1
@@ -85,8 +88,8 @@ Params
             next_state_agent = next_state[agent.index,:]
             done_agent = done[agent.index]
 
-            #TODO: Maybe add states & actions for all agents? --> Adjust model, as well
-            agent.step(state_agent, action, reward_agent, next_state_agent, done_agent)
+            #TODO: Maybe add states all agents? --> Adjust model, as well
+            agent.step(state_agent, action, reward_agent, next_state_agent, done_agent,beta)
 
     def save(self, filename_root):
         """Saves the agent to the local workplace, one DDPG agent at a time

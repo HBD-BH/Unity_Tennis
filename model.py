@@ -97,6 +97,7 @@ class Critic(nn.Module):
         action = action.float()
 
         #print(f"x before cat: {x.size()}")
+        #print(f"action before cat: {action.size()}")
         x = torch.cat((x, action), dim=1)
         #print(f"x after cat: {x.size()}")
         x = self.nonlin(self.hidden_layers[1](x))

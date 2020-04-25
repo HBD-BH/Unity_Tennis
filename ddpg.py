@@ -8,7 +8,7 @@ from model import Actor, Critic
 from utilities import hard_update, soft_update
 
 from OUNoise import OUNoise
-from buffer import ReplayBuffer
+from buffer import ReplayBuffer, PrioritizedReplayBuffer
 
 LR_ACTOR = 1e-3               # Learning rate for the actor's optimizer
 LR_CRITIC = 1e-3               # Learning rate for the critic's optimizer
@@ -17,6 +17,7 @@ GAMMA = 0.99            # Discount factor
 
 BUFFER_SIZE = int(1e6)  # Replay buffer size
 BATCH_SIZE = 128        # Minibatch size
+USE_PER = True          # Use normal replay buffer or prioritized experience replay
 
 WEIGHT_DECAY = 0#1e-5     # Weight decay for critic optimizer
 UPDATE_EVERY = 1        # Update weights every {} time steps
@@ -62,7 +63,10 @@ class DDPGAgent:
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
 
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+        if USE_PER:
+            self.memory = PrioritizedReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+        else:
+            self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
 
     # act and act_targets similar to exercises and MADDPG Lab
     def act(self, state, noise=0.0):
@@ -71,7 +75,7 @@ class DDPGAgent:
         Params
         ======
             state (array_like): current state
-            noise (boolean):    control whether or not noise is added
+            noise (float):    control whether or not noise is added
         """
         # Uncomment if state is numpy array instead of tensor
         state = torch.from_numpy(state).float().to(device)
@@ -91,23 +95,34 @@ class DDPGAgent:
         #action = (act_max - act_min) * (probs - 0.5) + (act_max + act_min)/2
         return np.clip(probs, -1, 1)
 
-
-    def act_targets(self, state, noise=0.0):
+    # act and act_targets similar to exercises and MADDPG Lab
+    def act_target(self, state, noise=0.0):
         """Returns actions for given state as per current target policy.
     
         Params
         ======
             state (array_like): current state
+            noise (float):    control whether or not noise is added
         """
-        state = state.to(device)
+        # Uncomment if state is numpy array instead of tensor
+        state = torch.from_numpy(state).float().to(device)
+        # Put model into evaluation mode
+        action = np.zeros(self.action_size)
         self.actor_target.eval()
-        
-        probs = self.actor_target(state) + noise*self.noise.noise() 
+
+        # Get actions for current state, transformed from probabilities
+        with torch.no_grad():
+            probs = self.actor_target(state) + noise*self.noise.noise() 
+
+        # Put actor back into training mode
+        self.actor_target.train()
 
         #  Transform probability into valid action ranges
-        return np.clip(action, -1, 1)
+        #act_min, act_max = self.action_limits
+        #action = (act_max - act_min) * (probs - 0.5) + (act_max + act_min)/2
+        return np.clip(probs, -1, 1)
 
-    def step(self, state, action, reward, next_state, done):
+    def step(self, state, action, reward, next_state, done, beta=0):
         """Save experience in replay memory, use random samples from buffer to learn.
         
         PARAMS
@@ -117,12 +132,38 @@ class DDPGAgent:
             reward:     earned reward
             next_state: next state
             done:       Whether episode has finished
-            TODO: add beta for prioritized experience replay
+            beta (float 0..1): PER: to what extend use importance weigths 
+                                (0 - no corrections, 1 - full correction)
         """
         self.tstep += 1
 
         # Save experience in replay memory
-        self.memory.add(state, action, reward, next_state, done)
+        if USE_PER:
+            # If we use PER, we use the error from prediction to actual Q-value as priorities
+            next_actions = self.act_target(state).unsqueeze(0)
+            # Transfer everything to torch tensors
+            actions_agent = torch.from_numpy(action[:,self.index*self.num_agents:self.index*self.num_agents+self.action_size]).float().to(device)
+            state = torch.from_numpy(state).unsqueeze(0).float().to(device)
+            action = torch.from_numpy(action).float().to(device)
+
+            next_actions = torch.cat((actions_agent, next_actions), dim=1).to(device)
+            next_state = torch.from_numpy(next_state).unsqueeze(0).float().to(device)
+            # Predicted Q value from Critic target network
+            self.critic_target.eval()
+            self.critic_local.eval()
+            with torch.no_grad():
+                Q_targets_next = self.critic_target(next_state, next_actions)
+
+                Q_targets = reward + self.gamma * Q_targets_next * (1 - done)
+                Q_expected = self.critic_local(state,action)
+            self.critic_target.train()
+            self.critic_local.train()
+            
+            # Error works as priority
+            error = (Q_expected - Q_targets)**2
+            self.memory.add(state, action, reward, next_state, done, error)
+        else:
+            self.memory.add(state, action, reward, next_state, done)
 
         # Learn every UPDATE_EVERY time steps
         self.tstep = (self.tstep + 1 ) % UPDATE_EVERY
@@ -130,7 +171,10 @@ class DDPGAgent:
         # If UPDATE_EVERY and enough samples are available in memory, get random subset and learn
         if self.tstep == 0 and len(self.memory) > BATCH_SIZE:
             for _ in range(self.num_updates):
-                experiences = self.memory.sample()
+                if USE_PER:
+                    experiences = self.memory.sample(beta)
+                else:
+                    experiences = self.memory.sample()
                 self.learn(experiences)
 
     def learn(self, experiences):
@@ -149,7 +193,10 @@ class DDPGAgent:
             all_next_actions (Tuple[torch.Variable]): all next actions 
         """ 
 
-        states, actions, rewards, next_states, dones = experiences
+        if USE_PER:
+            states, actions, rewards, next_states, dones, weights_cur, indices = experiences
+        else:
+            states, actions, rewards, next_states, dones = experiences
 
         next_actions = self.actor_target(next_states)
         # Select correct set of actions from all actions
@@ -160,13 +207,6 @@ class DDPGAgent:
         actions_agent = actions[:,self.index*self.num_agents:self.index*self.num_agents+self.action_size].float()
 
         # ------------------- update critic ------------------- #
-        #print(f"Action in experiences: {actions.size()}")
-        """
-        if self.index == 0:
-            next_actions = torch.cat((next_actions, actions_agent), dim=1).to(device)
-        else:
-            next_actions = torch.cat((actions_agent, next_actions), dim=1).to(device)
-        """
         next_actions = torch.cat((actions_agent, next_actions), dim=1).to(device)
         
         # Predicted Q value from Critic target network
@@ -176,6 +216,12 @@ class DDPGAgent:
         Q_targets = rewards + self.gamma * Q_targets_next * (1 - dones)
         Q_expected = self.critic_local(states,actions)
         
+        if USE_PER:
+            # Update priorities in PER
+            loss = (Q_expected - Q_targets)**2
+            loss = loss.reshape(weights_cur.shape) * weights_cur
+            self.memory.update(indices, loss.data.cpu().numpy())
+
         # Compute critic loss
         critic_loss = F.mse_loss(Q_expected, Q_targets)
         self.critic_optimizer.zero_grad()

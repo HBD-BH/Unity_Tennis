@@ -5,7 +5,6 @@ import torch
 import torch.nn.functional as F
 import random
 from utilities import soft_update, transpose_to_tensor
-from buffer import ReplayBuffer
 
 GRAD_CLIPPING = 1.0     # For gradient clipping
 

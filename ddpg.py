@@ -85,7 +85,7 @@ class DDPGAgent:
 
         # Get actions for current state, transformed from probabilities
         with torch.no_grad():
-            probs = self.actor_local(state) + noise*self.noise.noise() 
+            probs = self.actor_local(state) + noise*self.noise.noise().to(device)
 
         # Put actor back into training mode
         self.actor_local.train()
@@ -112,7 +112,7 @@ class DDPGAgent:
 
         # Get actions for current state, transformed from probabilities
         with torch.no_grad():
-            probs = self.actor_target(state) + noise*self.noise.noise() 
+            probs = self.actor_target(state) + noise*self.noise.noise().to(device)
 
         # Put actor back into training mode
         self.actor_target.train()
@@ -140,7 +140,7 @@ class DDPGAgent:
         # Save experience in replay memory
         if USE_PER:
             # If we use PER, we use the error from prediction to actual Q-value as priorities
-            next_actions = self.act_target(state).unsqueeze(0)
+            next_actions = self.act_target(state).unsqueeze(0).to(device)
             # Transfer everything to torch tensors
             actions_agent = torch.from_numpy(action[:,self.index*self.num_agents:self.index*self.num_agents+self.action_size]).float().to(device)
             state = torch.from_numpy(state).unsqueeze(0).float().to(device)

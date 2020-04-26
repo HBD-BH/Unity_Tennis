@@ -117,22 +117,27 @@ class DDPG_Agent:
         self.critic_target.eval()
         self.critic_local.eval()
 
-        state = torch.from_numpy(state).float().to(device)
-        next_state = torch.from_numpy(next_state).float().to(device)
-        action = torch.from_numpy(action).float().to(device)
+        state = torch.from_numpy(states).float().to(device)
+        next_state = torch.from_numpy(next_states).float().to(device)
+        action = torch.from_numpy(actions).float().to(device)
+        #reward = torch.from_numpy(rewards).float().to(device)
+        #done = torch.from_numpy(dones).float().to(device)
 
-        with torch.no_gra(): 
+        with torch.no_grad(): 
             next_actions = self.actor_target(state)
             next_actions_agent = torch.cat((next_actions, action[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
 
             # Predicted Q value from Critic target network
-            Q_targets_next = self.critic_target(next_state, next_actions_agent)
-            Q_targets = reward + self.gamma * Q_targets_next * (1 - done)
+            Q_targets_next = self.critic_target(next_state, next_actions_agent).float()
+            #print(f"Type Q_t_n: {type(Q_targets_next)}")
+            #print(f"Type gamma: {type(self.gamma)}")
+            #print(f"Type dones: {type(dones)}")
+            Q_targets = rewards + self.gamma * Q_targets_next * (1 - dones)
             Q_expected = self.critic_local(state,action)
 
         # Use error between Q_expected and Q_targets as priority in buffer
         error = (Q_expected - Q_targets)**2
-        self.memory.add(state, action, reward, next_state, done, error)
+        self.memory.add(state, action, rewards, next_state, dones, error)
 
         # Set all networks back to training mode
         self.actor_target.train()
@@ -188,7 +193,7 @@ class DDPG_Agent:
         next_actions_agent = torch.cat((next_actions, actions[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
 
         # Predicted Q value from Critic target network
-        Q_targets_next = self.critic_target(next_states, next_actions)
+        Q_targets_next = self.critic_target(next_states, next_actions_agent)
         Q_targets = rewards + self.gamma * Q_targets_next * (1 - dones)
         Q_expected = self.critic_local(states,actions)
 

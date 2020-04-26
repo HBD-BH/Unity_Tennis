@@ -118,7 +118,9 @@ class Critic(nn.Module):
 
         # Add normalization for each layer
         self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
-
+        
+        self.drop = nn.Dropout(p=0.4)
+        
         # Nonlinear activation function
         self.nonlin = F.selu
         
@@ -157,6 +159,8 @@ class Critic(nn.Module):
         x = torch.cat((x, action), dim=1)
         x = self.nonlin(self.norm_layers[1](self.hidden_layers[1](x)))
 
+        # Add dropout layer to improve performance
+        x = self.drop(x)
 
         # If there are additional hidden layers, 
         # Forward through each layer in `hidden_layers`, with normalization and activation

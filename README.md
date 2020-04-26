@@ -1,4 +1,4 @@
-# Continuous Control
+# Multiple Agents Control
 
 ### Introduction 
 
@@ -20,9 +20,9 @@ The agent is to be trained by playing against itself. The environment is conside
 
 For correct installation, please make sure to use Python 3.6. 
 
-In order to run the Jupyter Notebook `Continuous_Control.ipynb`, please see the installation instructions [here](https://jupyter.readthedocs.io/en/latest/install.html).   
+In order to run the Jupyter Notebook `Tennis.ipynb`, please see the installation instructions [here](https://jupyter.readthedocs.io/en/latest/install.html).   
 
-To run the notebook, you also have to download the `Reacher` environment from Udacity's [project page](https://github.com/udacity/deep-reinforcement-learning/tree/master/p3_collab-compet). If your system is not Linux, please adjust the respective line of code in the beginning of `Continuous_Control.ipynb` to point to your environment.
+To run the notebook, you also have to download the `Tennis` environment from Udacity's [project page](https://github.com/udacity/deep-reinforcement-learning/tree/master/p3_collab-compet). If your system is not Linux, please adjust the respective line of code in the beginning of `Tennis.ipynb` to point to your environment.
 
 ### Running the code
 
@@ -30,4 +30,4 @@ To run the code, please open `Tennis.ipynb` as a Jupyter notebook and follow the
 
 ### Documentation
 
-You find a report with a more detailed description of the implementation in the [doc](doc) subfolder.
+You will find a report with a more detailed description of the implementation in the [doc](doc) subfolder, once the project is finished.

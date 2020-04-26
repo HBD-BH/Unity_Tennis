@@ -61,7 +61,7 @@ class DDPG_Agent:
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
 
         # Ornstein-Uhlenbeck noise 
-        self.noise = OUNoise((self.num_agents, action_size), seed)
+        self.noise = OUNoise((1, action_size), seed)
 
         # Replay buffer 
         self.memory = PrioritizedReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed, self.alpha)
@@ -77,16 +77,14 @@ class DDPG_Agent:
         """
         # Uncomment if state is numpy array instead of tensor
         states = torch.from_numpy(states).float().to(device)
-        actions = np.zeros((self.num_agents, self.action_size))
+        actions = np.zeros((1, self.action_size))
         
         # Put model into evaluation mode
         self.actor_local.eval()
 
         # Get actions for current state, transformed from probabilities
         with torch.no_grad():
-            for i in range(self.num_agents):
-                probs = self.actor_local(states[i]).cpu().data.numpy()
-                actions[i, :] = probs
+            actions = self.actor_local(states).cpu().data.numpy()
 
         # Put actor back into training mode
         self.actor_local.train()

@@ -33,8 +33,8 @@ class Actor(nn.Module):
         super().__init__()
         self.seed = torch.manual_seed(seed)
 
-        # Add the first layer, input to a hidden layer
-        self.hidden_layers = nn.ModuleList([nn.Linear(state_size, hidden_layers[0])])
+        # Add the first layer, input to a hidden layer with input size num_agents*state_size
+        self.hidden_layers = nn.ModuleList([nn.Linear(2*state_size, hidden_layers[0])])
         
         # Add a variable number of more hidden layers
         layer_sizes = zip(hidden_layers[:-1], hidden_layers[1:])

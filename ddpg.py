@@ -8,19 +8,20 @@ from model import Actor, Critic
 from utilities import hard_update, soft_update
 
 from OUNoise import OUNoise
-from buffer import ReplayBuffer
+from buffer import ReplayBuffer, PrioritizedReplayBuffer
 
 LR_ACTOR = 1e-3               # Learning rate for the actor's optimizer
 LR_CRITIC = 1e-3              # Learning rate for the critic's optimizer
-TAU = 1e-3                    # Tau factor for soft update
+TAU = 6e-2                    # Tau factor for soft update
 GAMMA = 0.99                  # Discount factor
+ALPHA = 0                     # PER: prioritization (0 = no, 1 = full)
 
 BUFFER_SIZE = int(1e6)        # Replay buffer size
-BATCH_SIZE = 512              # Minibatch size
+BATCH_SIZE = 128              # Minibatch size
 
 WEIGHT_DECAY = 0#1e-5         # Weight decay for critic optimizer
-UPDATE_EVERY = 20             # Update weights every {} time steps
-N_UPDATES = 10                # Number of successive trainings
+UPDATE_EVERY = 1              # Update weights every {} time steps
+N_UPDATES = 1                 # Number of successive trainings
 GRAD_CLIPPING = 1             # Gradient clipping
 
 
@@ -28,15 +29,16 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class DDPG_Agent:
 
-    def __init__(self, state_size, action_size, seed, index=0):
+    def __init__(self, state_size, action_size, seed, index=0, num_agents=2):
         """Initialize an Agent object.
         
         Params
         ======
-            state_size (int): dimension of each state
-            action_size (int): dimension of each action
-            seed (int): random seed
-            index (int): Index assigned to the agent
+            state_size (int):   Dimension of each state
+            action_size (int):  Dimension of each action
+            seed (int):         Random seed
+            index (int):        Index assigned to the agent
+            num_agents (int):   Number of agents in the environment
         """
 
         self.state_size = state_size           # State size
@@ -45,9 +47,10 @@ class DDPG_Agent:
         self.index = index                     # Index of this agent, not used at the moment
         self.tau = TAU                         # Parameter for soft weight update
         self.num_updates = N_UPDATES           # Number of updates to perform when updating 
-        self.num_agents=2                      # Number of agents in the environment
+        self.num_agents=num_agents             # Number of agents in the environment
         self.tstep = 0                         # Simulation step (modulo (%) UPDATE_EVERY)
         self.gamma = GAMMA                     # Gamma for the reward discount
+        self.alpha = ALPHA                     # PER: toggle prioritization (0..1)
 
         # Set up actor and critic networks
         self.actor_local = Actor(state_size, action_size, seed).to(device)
@@ -61,7 +64,7 @@ class DDPG_Agent:
         self.noise = OUNoise((self.num_agents, action_size), seed)
 
         # Replay buffer 
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+        self.memory = PrioritizedReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed, self.alpha)
 
     # act and act_targets similar to exercises and MADDPG Lab
     def act(self, states, noise=1.0):
@@ -94,7 +97,7 @@ class DDPG_Agent:
         #  Transform probability into valid action ranges
         return np.clip(actions, -1, 1)
 
-    def step(self, states, actions, rewards, next_states, dones):
+    def step(self, states, actions, rewards, next_states, dones, beta):
         """Save experience in replay memory, use random samples from buffer to learn.
         
         PARAMS
@@ -104,19 +107,55 @@ class DDPG_Agent:
             rewards:    [n_agents]              earned reward
             next_states:[n_agents, state_size]  next state
             dones:      [n_agents]              Whether episode has finished
+            beta:       [0..1]                  PER: toggles correction for importance weights (0 - no corrections, 1 - full correction)
         """
-        # Save experience in replay memory
-        for i in range(self.num_agents):
-            self.memory.add(states[i,:], actions[i,:], rewards[i], next_states[i,:], dones[i])
+        # ------------------------------------------------------------------
+        # Save experience in replay memory - slightly more effort due to Prioritization
+        # We need to calculate priorities for the experience tuple. 
+        # This is in our case (Q_expected - Q_target)**2
+        # -----------------------------------------------------------------
+        # Set all networks to evaluation mode
+        self.actor_target.eval()
+        self.critic_target.eval()
+        self.critic_local.eval()
 
+        state = torch.from_numpy(state).float().to(device)
+        next_state = torch.from_numpy(next_state).float().to(device)
+        action = torch.from_numpy(action).float().to(device)
+
+        with torch.no_gra(): 
+            next_actions = self.actor_target(state)
+            next_actions_agent = torch.cat((next_actions, action[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
+
+            # Predicted Q value from Critic target network
+            Q_targets_next = self.critic_target(next_state, next_actions_agent)
+            Q_targets = reward + self.gamma * Q_targets_next * (1 - done)
+            Q_expected = self.critic_local(state,action)
+
+        # Use error between Q_expected and Q_targets as priority in buffer
+        error = (Q_expected - Q_targets)**2
+        self.memory.add(state, action, reward, next_state, done, error)
+
+        # Set all networks back to training mode
+        self.actor_target.train()
+        self.critic_target.train()
+        self.critic_local.train()
+        
+        # ------------------------------------------------------------------
+        # Usual learning procedure
+        # -----------------------------------------------------------------
         # Learn every UPDATE_EVERY time steps
         self.tstep = (self.tstep + 1 ) % UPDATE_EVERY
 
         # If UPDATE_EVERY and enough samples are available in memory, get random subset and learn
         if self.tstep == 0 and len(self.memory) > BATCH_SIZE:
             for i in range(self.num_updates):
-                experiences = self.memory.sample()
+                experiences = self.memory.sample(beta)
                 self.learn(experiences)
+
+    def reset(self):
+        """Reset the noise parameter of the agent."""
+        self.noise.reset()
 
     def learn(self, experiences):
         """Update value parameters using given batch of experience tuples. 
@@ -129,36 +168,53 @@ class DDPG_Agent:
 
         Params
         ======
-            experiences (Tuple[torch.Variable]): tuple of (s, a, r, s', done) tuples 
+            experiences (Tuple[torch.Variable]): tuple of 
+                    states          states visited
+                    actions         actions taken by all agents
+                    rewards         rewards received
+                    next states     all next states
+                    dones           whether or not a final state is reached 
+                    weights         weights of the experiences
+                    indices         indices of the experiences            
         """ 
 
         # Load experiences from sample
-        states, actions, rewards, next_states, dones = experiences
+        states, actions, rewards, next_states, dones, weights_cur, indices = experiences
 
         # ------------------- update critic ------------------- #
         
         # Get next actions via actor network
         next_actions = self.actor_target(next_states)
-      
+        
+        # Stack action together with action of the agent
+        next_actions_agent = torch.cat((next_actions, actions[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
+
         # Predicted Q value from Critic target network
-        #with torch.no_grad():
         Q_targets_next = self.critic_target(next_states, next_actions)
         Q_targets = rewards + self.gamma * Q_targets_next * (1 - dones)
         Q_expected = self.critic_local(states,actions)
+
+        # Update priorities in ReplayBuffer
+        loss = (Q_expected - Q_targets).pow(2).reshape(weights_cur.shape) * weights_cur
+        self.memory.update(indices, loss.data.cpu().numpy())
         
         # Compute critic loss
         critic_loss = F.mse_loss(Q_expected, Q_targets)
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         # Clip gradients
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), GRAD_CLIPPING)
+        #torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), GRAD_CLIPPING)
         self.critic_optimizer.step()
 
 
         # ------------------- update actor ------------------- #
         actions_expected = self.actor_local(states)
+
+        # Stack action together with action of the agent
+        actions_expected_agent = torch.cat((actions_expected, actions[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
+
         # Compute actor loss based on expectation from actions_expected
-        actor_loss = -self.critic_local(states, actions_expected).mean()
+        actor_loss = -self.critic_local(states, actions_expected_agent).mean()
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
@@ -167,6 +223,13 @@ class DDPG_Agent:
         self.target_soft_update(self.critic_local, self.critic_target)
         self.target_soft_update(self.actor_local, self.actor_target)
 
+    def target_soft_update(self, local_model, target_model):
+        """Soft update model parameters for actor and critic of all MADDPG agents.
+        θ_target = τ*θ_local + (1 - τ)*θ_target
+        """
+        
+        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
+            target_param.data.copy_(self.tau*local_param.data + (1.0-self.tau)*target_param.data)
         
     def save(self, filename):
         """Saves the agent to the local workplace
@@ -213,10 +276,3 @@ class DDPG_Agent:
         self.critic_local.load_state_dict(checkpoint['critic_state_dict'])
 
 
-    def target_soft_update(self, local_model, target_model):
-        """Soft update model parameters for actor and critic of all MADDPG agents.
-        θ_target = τ*θ_local + (1 - τ)*θ_target
-        """
-        
-        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
-            target_param.data.copy_(self.tau*local_param.data + (1.0-self.tau)*target_param.data)

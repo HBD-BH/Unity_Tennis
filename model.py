@@ -20,7 +20,7 @@ def hidden_init(layer):
 class Actor(nn.Module):
     "Actor Network" 
 
-    def __init__(self, state_size, action_size, seed, hidden_layers=[512,256]):
+    def __init__(self, state_size, action_size, seed, hidden_layers=[256,128]):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
@@ -41,7 +41,7 @@ class Actor(nn.Module):
         self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
         # Add batch normalization for each layer
-        self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
+        #self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
 
         # Nonlinear activiation function
         self.nonlin = F.selu
@@ -70,13 +70,13 @@ class Actor(nn.Module):
         ''' Forward pass through the network, returns the action '''
 
         # Add singleton dimension for 1-D data
-        if state.dim() == 1:
-            state = state.unsqueeze(0)
+        #if state.dim() == 1:
+            #state = state.unsqueeze(0)
 
         x = state
         # Forward through each layer in `hidden_layers`, with batch normalization and activation
-        for i, linear in enumerate(self.hidden_layers):
-            x = self.nonlin(self.norm_layers[i](linear(x)))
+        for linear in self.hidden_layers:
+            x = self.nonlin(linear(x))
 
         x = self.output(x)
 
@@ -87,7 +87,7 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     "Critic Network" 
 
-    def __init__(self, state_size, action_size, seed, hidden_layers=[512,256]):
+    def __init__(self, state_size, action_size, seed, hidden_layers=[256,128]):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
@@ -104,12 +104,12 @@ class Critic(nn.Module):
             hidden_layers = [hidden_layers, hidden_layers]
 
         # Add the first layer, input to a hidden layer
-        # For the critic, this is num_agents * (states)
-        self.hidden_layers = nn.ModuleList([nn.Linear(state_size *1, hidden_layers[0])])
+        # For the critic, this is num_agents * (state_size)
+        self.hidden_layers = nn.ModuleList([nn.Linear(state_size*2, hidden_layers[0])])
         # self.hidden_layers.extend([nn.BatchNorm1d(hidden_layers[0])])
         
-        # Add second hidden layer, with actions as additional inputs
-        self.hidden_layers.extend([nn.Linear(hidden_layers[0] + 1*action_size, hidden_layers[1])])
+        # Add second hidden layer, with num_agents * actions as additional inputs
+        self.hidden_layers.extend([nn.Linear(hidden_layers[0] + 2*action_size, hidden_layers[1])])
 
         # In case we have additional hidden layers, add them
         if len(hidden_layers)>2:
@@ -117,9 +117,9 @@ class Critic(nn.Module):
             self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
         # Add normalization for each layer
-        self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
+        #self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
         
-        self.drop = nn.Dropout(p=0.4)
+        #self.drop = nn.Dropout(p=0.4)
         
         # Nonlinear activation function
         self.nonlin = F.selu
@@ -148,25 +148,25 @@ class Critic(nn.Module):
         ''' Forward pass through the network, returns the estimated value '''
 
         # Add singleton dimension for 1-D input
-        if state.dim() == 1:
-            state = state.unsqueeze(0)
+        #if state.dim() == 1:
+            #state = state.unsqueeze(0)
         
         # State is input to first layer, convert everything to float
-        x = self.nonlin(self.norm_layers[0](self.hidden_layers[0](state))).float()
+        x = self.nonlin(self.hidden_layers[0](state)).float()
         action = action.float()
 
         # Add action as input to second hidden layer
         x = torch.cat((x, action), dim=1)
-        x = self.nonlin(self.norm_layers[1](self.hidden_layers[1](x)))
+        x = self.nonlin(self.hidden_layers[1](x))
 
         # Add dropout layer to improve performance
-        x = self.drop(x)
+        #x = self.drop(x)
 
         # If there are additional hidden layers, 
         # Forward through each layer in `hidden_layers`, with normalization and activation
         if len(self.hidden_layers)>2:
             for i, linear in enumerate(self.hidden_layers[2:]):
-                x = self.nonlin(self.norm_layers[i+2](linear(x)))
+                x = self.nonlin(linear(x))
     
         x = self.output(x)
 

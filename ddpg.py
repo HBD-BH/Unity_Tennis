@@ -43,7 +43,7 @@ class DDPG_Agent:
 
         self.state_size = state_size           # State size
         self.action_size = action_size         # Action size
-        self.seed = torch.manual_seed(seed)    # Random seed
+        self.seed = random.seed(seed)    # Random seed
         self.index = index                     # Index of this agent, not used at the moment
         self.tau = TAU                         # Parameter for soft weight update
         self.num_updates = N_UPDATES           # Number of updates to perform when updating 

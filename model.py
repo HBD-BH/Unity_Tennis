@@ -44,7 +44,7 @@ class Actor(nn.Module):
         #self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
 
         # Nonlinear activiation function
-        self.nonlin = F.selu
+        self.nonlin = F.relu
         
         # The actor outputs action_size values
         self.output = nn.Linear(hidden_layers[-1], action_size)
@@ -122,7 +122,7 @@ class Critic(nn.Module):
         #self.drop = nn.Dropout(p=0.4)
         
         # Nonlinear activation function
-        self.nonlin = F.selu
+        self.nonlin = F.relu
         
         # The critic only outputs a single (Q) value
         self.output = nn.Linear(hidden_layers[-1], 1)

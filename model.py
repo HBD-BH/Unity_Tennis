@@ -3,10 +3,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from itertools import chain
-
-# According to lesson
+# Weight init according to lessons
 def hidden_init(layer):
+    """Helper function to initialize layers
+    Returns [-1/sqrt(f) +1/sqrt(f)] where f is the fan_in of the layer.
+    
+    Params
+    ======
+        layer: Current layer
+    """
     fan_in = layer.weight.data.size()[0]
     lim = 1. / np.sqrt(fan_in)
     return (-lim, lim)
@@ -15,7 +20,7 @@ def hidden_init(layer):
 class Actor(nn.Module):
     "Actor Network" 
 
-    def __init__(self, state_size, action_size, seed, hidden_layers=[256,256]):
+    def __init__(self, state_size, action_size, seed, hidden_layers=[512,256]):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
@@ -35,12 +40,16 @@ class Actor(nn.Module):
         layer_sizes = zip(hidden_layers[:-1], hidden_layers[1:])
         self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
+        # Add batch normalization for each layer
         self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
 
+        # Nonlinear activiation function
         self.nonlin = F.selu
         
+        # The actor outputs action_size values
         self.output = nn.Linear(hidden_layers[-1], action_size)
 
+        # Initialize weigths 
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -55,19 +64,20 @@ class Actor(nn.Module):
         
         self.hidden_layers[-1].weight.data.uniform_(-3e-3,+3e-3)
 
+
         
     def forward(self, state):
         ''' Forward pass through the network, returns the action '''
 
+        # Add singleton dimension for 1-D data
         if state.dim() == 1:
             state = state.unsqueeze(0)
-        
-        
+
         x = state
-        # Forward through each layer in `hidden_layers`, with SELU activation
+        # Forward through each layer in `hidden_layers`, with batch normalization and activation
         for i, linear in enumerate(self.hidden_layers):
             x = self.nonlin(self.norm_layers[i](linear(x)))
-    
+
         x = self.output(x)
 
         # Return an action probability
@@ -77,7 +87,7 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     "Critic Network" 
 
-    def __init__(self, state_size, action_size, seed, hidden_layers=[256,256]):
+    def __init__(self, state_size, action_size, seed, hidden_layers=[512,256]):
         ''' Builds a feedforward network with arbitrary hidden layers.
         
             Arguments
@@ -99,20 +109,25 @@ class Critic(nn.Module):
         # self.hidden_layers.extend([nn.BatchNorm1d(hidden_layers[0])])
         
         # Add second hidden layer, with actions as additional inputs
-        self.hidden_layers.extend([nn.Linear(hidden_layers[0] + 2*action_size, hidden_layers[1])])
+        self.hidden_layers.extend([nn.Linear(hidden_layers[0] + 1*action_size, hidden_layers[1])])
 
+        # In case we have additional hidden layers, add them
         if len(hidden_layers)>2:
             layer_sizes = zip(hidden_layers[1:-1], hidden_layers[2:])
             self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
+        # Add normalization for each layer
         self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
 
+        # Nonlinear activation function
         self.nonlin = F.selu
         
+        # The critic only outputs a single (Q) value
         self.output = nn.Linear(hidden_layers[-1], 1)
-
-        self.initialize_weights()
         
+        # Initialize weights
+        self.initialize_weights()
+
     def initialize_weights(self):
         """ Initialize model weights
         All hidden layers except the last one: 
@@ -125,9 +140,12 @@ class Critic(nn.Module):
         
         self.hidden_layers[-1].weight.data.uniform_(-3e-3,+3e-3)
 
+
+        
     def forward(self, state, action):
         ''' Forward pass through the network, returns the estimated value '''
 
+        # Add singleton dimension for 1-D input
         if state.dim() == 1:
             state = state.unsqueeze(0)
         
@@ -135,14 +153,13 @@ class Critic(nn.Module):
         x = self.nonlin(self.norm_layers[0](self.hidden_layers[0](state))).float()
         action = action.float()
 
-        #print(f"x before cat: {x.size()}")
-        #print(f"action before cat: {action.size()}")
+        # Add action as input to second hidden layer
         x = torch.cat((x, action), dim=1)
-        #print(f"x after cat: {x.size()}")
         x = self.nonlin(self.norm_layers[1](self.hidden_layers[1](x)))
 
 
-        # Forward through each layer in `hidden_layers`, with activation
+        # If there are additional hidden layers, 
+        # Forward through each layer in `hidden_layers`, with normalization and activation
         if len(self.hidden_layers)>2:
             for i, linear in enumerate(self.hidden_layers[2:]):
                 x = self.nonlin(self.norm_layers[i+2](linear(x)))
@@ -151,5 +168,3 @@ class Critic(nn.Module):
 
         # Return the estimated value itself
         return x
-
-

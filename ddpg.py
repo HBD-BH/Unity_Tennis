@@ -125,7 +125,14 @@ class DDPG_Agent:
 
         with torch.no_grad(): 
             next_actions = self.actor_target(state)
-            next_actions_agent = torch.cat((next_actions, action[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
+
+            own_action = action[:,self.index*self.action_size:(self.index+1)*self.action_size]
+            if self.index:
+                # Agent 1 
+                next_actions_agent = torch.cat((own_action, next_actions), dim=1)
+            else:
+                # Agent 0: flipped order
+                next_actions_agent = torch.cat((next_actions, own_action), dim=1)
 
             # Predicted Q value from Critic target network
             Q_targets_next = self.critic_target(next_state, next_actions_agent).float()
@@ -152,7 +159,7 @@ class DDPG_Agent:
 
         # If UPDATE_EVERY and enough samples are available in memory, get random subset and learn
         if self.tstep == 0 and len(self.memory) > BATCH_SIZE:
-            for i in range(self.num_updates):
+            for _ in range(self.num_updates):
                 experiences = self.memory.sample(beta)
                 self.learn(experiences)
 
@@ -190,7 +197,14 @@ class DDPG_Agent:
         next_actions = self.actor_target(next_states)
         
         # Stack action together with action of the agent
-        next_actions_agent = torch.cat((next_actions, actions[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
+        own_actions = actions[:,self.index*self.action_size:(self.index+1)*self.action_size]
+        if self.index:
+            # Agent 1 
+            next_actions_agent = torch.cat((own_actions, next_actions), dim=1)
+        else:
+            # Agent 0: flipped order
+            next_actions_agent = torch.cat((next_actions, own_actions), dim=1)
+
 
         # Predicted Q value from Critic target network
         Q_targets_next = self.critic_target(next_states, next_actions_agent)
@@ -214,7 +228,13 @@ class DDPG_Agent:
         actions_expected = self.actor_local(states)
 
         # Stack action together with action of the agent
-        actions_expected_agent = torch.cat((actions_expected, actions[:,self.index*self.action_size:(self.index+1)*self.action_size]), dim=1)
+        own_actions = actions[:,self.index*self.action_size:(self.index+1)*self.action_size]
+        if self.index:
+            # Agent 1:
+            actions_expected_agent = torch.cat((own_actions, actions_expected), dim=1)
+        else: 
+            # Agent 0: flipped order
+            actions_expected_agent = torch.cat((actions_expected, own_actions), dim=1)
 
         # Compute actor loss based on expectation from actions_expected
         actor_loss = -self.critic_local(states, actions_expected_agent).mean()

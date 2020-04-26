@@ -1,19 +1,19 @@
 import numpy as np
 import torch
 import copy
+import random
 
 # Based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab       
 class OUNoise(object):
     """Ornstein-Uhlenbeck process"""
     
-    def __init__(self, size, seed, mu=0.0, theta=0.15, sigma=0.2):
+    def __init__(self, size, seed, mu=0.0, theta=0.13, sigma=0.2):
         """ initialise noise parameters """
         self.mu = mu * np.ones(size)
         self.theta = theta
         self.sigma = sigma
-        self.dt = 1e-2
         self.size = size
-        self.seed = torch.manual_seed(seed)
+        self.seed = random.seed(seed)
         self.reset()
         
     def reset(self):

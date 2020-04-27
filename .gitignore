@@ -7,8 +7,6 @@
 
 .*.*.un~
 
-.ipynb_checkpoints/
-
 *.log
 
 Tennis_Linux/Tennis_Data/

@@ -1,5 +1,7 @@
 # Multiple Agents Control
 
+![](doc/solved_playing.gif)
+
 ### Introduction 
 
 This code solves Udacity's version of Unity's [Tennis](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Learning-Environment-Examples.md#tennis) environment. The goal is to train an agent to control a racket in order to pass a ball without it falling to the ground. 

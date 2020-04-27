@@ -40,7 +40,7 @@ class Actor(nn.Module):
         layer_sizes = zip(hidden_layers[:-1], hidden_layers[1:])
         self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
-        # Add batch normalization for each layer
+        # Uncomment to add batch normalization for each layer (also change forward() function)
         #self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
 
         # Nonlinear activiation function
@@ -77,6 +77,9 @@ class Actor(nn.Module):
         # Forward through each layer in `hidden_layers`, with batch normalization and activation
         for linear in self.hidden_layers:
             x = self.nonlin(linear(x))
+        # If using batch normalization, comment the above and uncomment below
+        #for linear, norm in zip(self.hidden_layers, self.norm_layers):
+            #x = self.nonlin(norm(linear(x)))
 
         x = self.output(x)
 
@@ -116,7 +119,7 @@ class Critic(nn.Module):
             layer_sizes = zip(hidden_layers[1:-1], hidden_layers[2:])
             self.hidden_layers.extend([nn.Linear(h1, h2) for h1, h2 in layer_sizes])
 
-        # Add normalization for each layer
+        # Uncomment to add batch normalization for each layer (also change forward() function)
         #self.norm_layers = nn.ModuleList([nn.BatchNorm1d(hidden_layers[i]) for i in range(len(hidden_layers))])
         
         #self.drop = nn.Dropout(p=0.4)
@@ -153,11 +156,15 @@ class Critic(nn.Module):
         
         # State is input to first layer, convert everything to float
         x = self.nonlin(self.hidden_layers[0](state)).float()
+        # If using batch normalization, comment above and uncomment below
+        #x = self.nonlin(self.norm_layers[0](self.hidden_layers[0](state))).float()
         action = action.float()
 
         # Add action as input to second hidden layer
         x = torch.cat((x, action), dim=1)
         x = self.nonlin(self.hidden_layers[1](x))
+        # If using batch normalization, comment above and uncomment below
+        #x = self.nonlin(self.norm_layers[1](self.hidden_layers[1](x))).float()
 
         # Add dropout layer to improve performance
         #x = self.drop(x)
@@ -165,8 +172,11 @@ class Critic(nn.Module):
         # If there are additional hidden layers, 
         # Forward through each layer in `hidden_layers`, with normalization and activation
         if len(self.hidden_layers)>2:
-            for i, linear in enumerate(self.hidden_layers[2:]):
+            for linear in self.hidden_layers[2:]:
                 x = self.nonlin(linear(x))
+            # If using batch normalization, comment above and uncomment below
+            #for linear, norm in zip(self.hidden_layers[2:], self.norm_layers[2:]):
+                #x = self.nonlin(norm(linear(x))
     
         x = self.output(x)
 

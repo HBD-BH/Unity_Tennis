@@ -16,7 +16,7 @@ GAMMA = 0.99                  # Discount factor
 ALPHA = 0.0                     # PER: prioritization (0 = no, 1 = full)
 
 BUFFER_SIZE = int(1e6)        # Replay buffer size
-BATCH_SIZE = 128              # Minibatch size
+BATCH_SIZE = 256              # Minibatch size
 
 WEIGHT_DECAY = 0#1e-5         # Weight decay for critic optimizer
 UPDATE_EVERY = 1              # Update weights every {} time steps

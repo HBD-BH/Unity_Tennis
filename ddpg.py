@@ -43,7 +43,7 @@ class DDPG_Agent:
 
         self.state_size = state_size           # State size
         self.action_size = action_size         # Action size
-        self.seed = random.seed(seed)    # Random seed
+        self.seed = torch.manual_seed(seed)    # Random seed
         self.index = index                     # Index of this agent, not used at the moment
         self.tau = TAU                         # Parameter for soft weight update
         self.num_updates = N_UPDATES           # Number of updates to perform when updating 
@@ -125,7 +125,6 @@ class DDPG_Agent:
 
         with torch.no_grad(): 
             next_actions = self.actor_target(state)
-
             own_action = action[:,self.index*self.action_size:(self.index+1)*self.action_size]
             if self.index:
                 # Agent 1 
@@ -134,6 +133,7 @@ class DDPG_Agent:
                 # Agent 0: flipped order
                 next_actions_agent = torch.cat((next_actions, own_action), dim=1)
 
+            
             # Predicted Q value from Critic target network
             Q_targets_next = self.critic_target(next_state, next_actions_agent).float()
             #print(f"Type Q_t_n: {type(Q_targets_next)}")
@@ -297,5 +297,3 @@ class DDPG_Agent:
             return None
         self.actor_local.load_state_dict(checkpoint['actor_state_dict'])
         self.critic_local.load_state_dict(checkpoint['critic_state_dict'])
-
-

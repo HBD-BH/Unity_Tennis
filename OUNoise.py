@@ -13,7 +13,7 @@ class OUNoise(object):
         self.theta = theta
         self.sigma = sigma
         self.size = size
-        self.seed = random.seed(seed)
+        self.seed = torch.manual_seed(seed)
         self.reset()
         
     def reset(self):

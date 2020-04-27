@@ -1,10 +1,9 @@
 import numpy as np
-from ddpg import DDPGAgent
+from ddpg import DDPG_Agent
 import torch
 # import torch.nn as nn # Needed for grad clipping
 import torch.nn.functional as F
 import random
-from utilities import soft_update, transpose_to_tensor
 
 GRAD_CLIPPING = 1.0     # For gradient clipping
 
@@ -12,7 +11,7 @@ GRAD_CLIPPING = 1.0     # For gradient clipping
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class MADDPG_Agent(): 
-    def __init__(self, state_size, action_size, num_agents=2, seed=1):
+    def __init__(self, state_size, action_size, num_agents=2, seed=0):
         super(MADDPG_Agent, self).__init__()
 
         self.state_size = state_size
@@ -20,20 +19,20 @@ class MADDPG_Agent():
         self.seed = random.seed(seed)
 
         self.num_agents = num_agents             # Two agents for tennis environment
-        self.maddpg_agent = [DDPGAgent(self.state_size, self.action_size, seed, index=i) for i in range(self.num_agents)]
+        self.ddpg_agents = [DDPG_Agent(self.state_size, self.action_size, seed, index=i) for i in range(self.num_agents)]
 
         self.tstep = 0
 
 
-    def get_actors(self):
-        """Get actual actors of all the agents in the MADDPG object"""
-        actors = [ddpg_agent.actor_local for ddpg_agent in self.maddpg_agent]
-        return actors
+    #def get_actors(self):
+        #"""Get actual actors of all the agents in the MADDPG object"""
+        #actors = [ddpg_agent.actor_local for ddpg_agent in self.ddpg_agents]
+        #return actors
 
-    def get_target_actors(self):
-        """Get target actors of all the agents in the MADDPG object"""
-        target_actors = [ddpg_agent.actor_target for ddpg_agent in self.maddpg_agent]
-        return target_actors
+    #def get_target_actors(self):
+        #"""Get target actors of all the agents in the MADDPG object"""
+        #target_actors = [ddpg_agent.actor_target for ddpg_agent in self.ddpg_agents]
+        #return target_actors
 
     def act(self, states_all_agents, noise=0.0):
         """Get actions from all agents in the MADDPG object.
@@ -44,14 +43,19 @@ class MADDPG_Agent():
             noise: the noise to apply
         """
 
-        actions = []
-        for agent, state in zip(self.maddpg_agent, states_all_agents):
-            actions.append(agent.act(state,noise).numpy())
-        # actions = [agent.act(state, noise).numpy() for agent, state in zip(self.maddpg_agent, states_all_agents)]
+        # Alternative calculation
+        #actions_good = self.ddpg_agents[0].act(states_all_agents, noise)
+        #for agent in self.ddpg_agents[1:]:
+            #action = agent.act(states_all_agents,noise)
+            #actions_good = np.concatenate((actions_good, action), axis=0)
+        #actions_good = np.reshape(actions_good, (1, self.num_agents*self.action_size))
+
+        actions = [agent.act(states_all_agents, noise) for agent in self.ddpg_agents]
         # Transform from list to (1,numagents*action_size) ndarray
         actions = np.resize(np.asarray(actions, dtype=np.float32), (1,self.num_agents*self.action_size))
         return actions
 
+    '''
     def act_targets(self, states_all_agents, noise=0.0):
         """Get actions by target networks from all agents in the MADDPG object.
 Params
@@ -60,18 +64,19 @@ Params
             noise: the noise to apply
         """
 
-        actions = [agent.act_targets(state, noise) for agent, state in zip(self.maddpg_agent, states_all_agents)]
+        actions = [agent.act_targets(state, noise) for agent, state in zip(self.ddpg_agents, states_all_agents)]
         return actions
+    '''
 
-    def step(self, state, action, reward, next_state, done,beta=0):
+    def step(self, states, actions, rewards, next_states, done,beta=0):
         """ Save experience in replay memory, and learn new target weights
 
         Params
         =====
-            state:      current state
-            action:     taken action
-            reward:     earned reward
-            next_state: next state
+            states:      current states of all agents
+            actions:     taken actions of all agents
+            rewards:     earned rewards of all agents
+            next_states: next states of all agents
             done:       Whether episode has finished
             beta (float 0..1): PER: to what extend use importance weigths 
                                 (0 - no corrections, 1 - full correction)
@@ -80,16 +85,15 @@ Params
         self.tstep += 1
 
         # Step for each agent
-        for agent in self.maddpg_agent:
-            state_agent = state[agent.index,:]
-            #action_agent = action[agent.index]
-            reward_agent = reward[agent.index]
-            next_state_agent = next_state[agent.index,:]
-            done_agent = done[agent.index]
+        for agent in self.ddpg_agents:
+            agent.step(states,actions,rewards[agent.index],next_states,done,beta)
 
-            #TODO: Maybe add states all agents? --> Adjust model, as well
-            agent.step(state_agent, action, reward_agent, next_state_agent, done_agent,beta)
+    def reset(self):
+        """Reset noise parameters of each agent"""
 
+        for agent in self.ddpg_agents:
+            agent.reset()
+            
     def save(self, filename_root):
         """Saves the agent to the local workplace, one DDPG agent at a time
 
@@ -97,7 +101,7 @@ Params
         ======
             filename_root (string): where to save the weights. Root name, to which 'agentX.pth' is appended. 
         """
-        for i, agent in enumerate(self.maddpg_agent):
+        for i, agent in enumerate(self.ddpg_agents):
             filename_cur = f"{filename_root}_agent{i}.pth"
             agent.save(filename_cur)
     
@@ -109,7 +113,7 @@ Params
         ======
             filename_root (string): where to load data from. Root name, to which 'agentX' is appended for each agent.
         """
-        for i, agent in enumerate(self.maddpg_agent):
+        for i, agent in enumerate(self.ddpg_agents):
             filename_cur = f"{filename_root}_agent{i}.pth"
             agent.load_weights(filename_cur)
 

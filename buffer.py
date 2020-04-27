@@ -47,6 +47,7 @@ class ReplayBuffer:
         """Return the current size of internal memory."""
         return len(self.memory)
 
+# Adapted from https://github.com/PHRABAL/DRL-Tennis/blob/master/MADDPG_PER.ipynb
 class PrioritizedReplayBuffer:
     """Fixed-size buffer to store prioritized experience tuples."""
 
@@ -83,7 +84,6 @@ class PrioritizedReplayBuffer:
         Params
         ======
             beta: Toggle how importance weights are used: 0 - no corrections to 1 - full correction
-        
         """
         priorities = np.array(self.priorities).reshape(-1)            # Make row vector
         priorities = np.power(priorities + self.epsilon, self.alpha)  # Alpha toggles prioritization

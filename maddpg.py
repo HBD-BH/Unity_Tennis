@@ -43,16 +43,19 @@ class MADDPG_Agent():
             noise: the noise to apply
         """
 
-        # Alternative calculation
-        #actions_good = self.ddpg_agents[0].act(states_all_agents, noise)
-        #for agent in self.ddpg_agents[1:]:
-            #action = agent.act(states_all_agents,noise)
-            #actions_good = np.concatenate((actions_good, action), axis=0)
-        #actions_good = np.reshape(actions_good, (1, self.num_agents*self.action_size))
+        # Transform states and next_states into row vectors
+        states_all_agents = np.reshape(states_all_agents, (1,self.num_agents*self.state_size))
 
-        actions = [agent.act(states_all_agents, noise) for agent in self.ddpg_agents]
+        # Calculation of actions
+        actions = self.ddpg_agents[0].act(states_all_agents, noise)
+        for agent in self.ddpg_agents[1:]:
+            action = agent.act(states_all_agents,noise)
+            actions = np.concatenate((actions, action), axis=0)
+        actions = np.reshape(actions, (1, self.num_agents*self.action_size))
+
+        #actions = [agent.act(states_all_agents, noise) for agent in self.ddpg_agents]
         # Transform from list to (1,numagents*action_size) ndarray
-        actions = np.resize(np.asarray(actions, dtype=np.float32), (1,self.num_agents*self.action_size))
+        #actions = np.resize(np.asarray(actions, dtype=np.float32), (1,self.num_agents*self.action_size))
         return actions
 
     '''
@@ -84,6 +87,10 @@ Params
         # Increase t_step
         self.tstep += 1
 
+        # Transform states and next_states into row vectors
+        states = np.reshape(states, (1,self.num_agents*self.state_size))
+        next_states = np.reshape(next_states, (1,self.num_agents*self.state_size))
+        
         # Step for each agent
         for agent in self.ddpg_agents:
             agent.step(states,actions,rewards[agent.index],next_states,done,beta)

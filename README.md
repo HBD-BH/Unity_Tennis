@@ -30,4 +30,4 @@ To run the code, please open `Tennis.ipynb` as a Jupyter notebook and follow the
 
 ### Documentation
 
-You will find a report with a more detailed description of the implementation in the [doc](doc) subfolder, once the project is finished.
+You find a report with a more detailed description of the implementation in the [doc](doc) subfolder.

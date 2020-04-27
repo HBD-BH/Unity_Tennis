@@ -5,7 +5,6 @@ import numpy as np
 import random
 
 from model import Actor, Critic
-from utilities import hard_update, soft_update
 
 from OUNoise import OUNoise
 from buffer import ReplayBuffer, PrioritizedReplayBuffer
@@ -14,7 +13,7 @@ LR_ACTOR = 1e-3               # Learning rate for the actor's optimizer
 LR_CRITIC = 1e-3              # Learning rate for the critic's optimizer
 TAU = 6e-2                    # Tau factor for soft update
 GAMMA = 0.99                  # Discount factor
-ALPHA = 0                     # PER: prioritization (0 = no, 1 = full)
+ALPHA = 0.0                     # PER: prioritization (0 = no, 1 = full)
 
 BUFFER_SIZE = int(1e6)        # Replay buffer size
 BATCH_SIZE = 128              # Minibatch size
